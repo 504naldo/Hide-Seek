@@ -273,3 +273,164 @@ App runs at `http://localhost:3000`.
   - `cooldown_seconds` (default 60)
 - Mission completion checks these limits before granting a new inventory reward.
 - Missions UI now shows active rewards, cooldowns, and per-item unavailable activation reason.
+<<<<<<< ours
+=======
+
+## Production Deployment
+
+This project is deployable to **Vercel (Next.js runtime)** with **Supabase (Auth + Postgres + Realtime)** and optional Mapbox + Web Push integrations.
+
+### Deployment readiness audit (current repo)
+- ✅ Next.js app structure is compatible with Vercel App Router (`app/`, route handlers under `app/api/*`).
+- ✅ Production scripts exist in `package.json` (`build`, `start`, `lint`, `typecheck`).
+- ✅ Supabase SQL bootstrap exists at `supabase/schema.sql`.
+- ✅ Supabase env var usage is wired in server/client libs.
+- ✅ Mapbox token usage is wired in map components.
+- ✅ Push notification VAPID configuration is wired in both client bootstrap and server push utility.
+- ✅ Added `.env.example` for production/local environment parity.
+- ℹ️ No `vercel.json` is required for standard Next.js deployment on Vercel; framework defaults are sufficient.
+
+### Required environment variables (exact names)
+Set these in **Vercel Project → Settings → Environment Variables**:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=
+```
+
+Variable purpose:
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL (`https://<ref>.supabase.co`).
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon/public key for client + auth REST calls.
+- `SUPABASE_SERVICE_ROLE_KEY`: server-only key used by privileged route handlers.
+- `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN`: Mapbox public token for map rendering.
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY`: client-visible VAPID public key used when creating push subscriptions.
+- `VAPID_PRIVATE_KEY`: server-only VAPID private key used to sign push payloads.
+- `VAPID_SUBJECT`: VAPID subject, typically `mailto:<team-email>`.
+
+> Do **not** expose `SUPABASE_SERVICE_ROLE_KEY` or `VAPID_PRIVATE_KEY` on the client.
+
+### Vercel + Supabase deployment steps
+1. Push this repository to GitHub.
+2. In Vercel, create a new project from the repo.
+3. Configure all required environment variables above for Production (and Preview if needed).
+4. In Supabase, run `supabase/schema.sql` in SQL Editor.
+5. In Supabase Database Replication, enable realtime publication for gameplay tables (at minimum `location_updates`, and any tables you subscribe to in the client).
+6. In Supabase Auth settings:
+   - configure your Site URL to your Vercel domain,
+   - add Vercel preview/production URLs to Redirect URLs as needed.
+7. Deploy on Vercel.
+8. Validate core flows (auth, game create/join, location updates, missions/chat, push subscription).
+
+### Service verification matrix
+- **Next.js on Vercel**
+  - Build succeeds with `next build`.
+  - Route handlers under `app/api/*` respond in deployed environment.
+  - Cookies are secure in production (`secure: true` when `NODE_ENV=production`).
+- **Supabase auth/realtime/database**
+  - Signup/login/logout APIs succeed.
+  - Session refresh endpoint works.
+  - Realtime location stream receives updates.
+  - Schema tables/indexes from `supabase/schema.sql` are present.
+- **Mapbox**
+  - Map renders in game/map components without missing-token warnings.
+- **Web push (VAPID)**
+  - Client can create a push subscription.
+  - `/api/push/subscription` can store/remove subscriptions.
+  - Push send paths do not fail due to missing VAPID keys.
+
+### Production deployment checklist
+Use this checklist before go-live:
+
+- [ ] Supabase project created for production.
+- [ ] `supabase/schema.sql` executed successfully.
+- [ ] Supabase Auth Site URL and redirect URLs set to Vercel domains.
+- [ ] Realtime enabled for required tables.
+- [ ] Mapbox production token created and scoped.
+- [ ] VAPID keypair generated and configured in Vercel env vars.
+- [ ] All required env vars set in Vercel (Production and Preview as needed).
+- [ ] Vercel deployment completes with no build errors.
+- [ ] Manual smoke tests pass (auth, join/create game, map, chat, missions, push subscription).
+
+### Exact local commands to run (if deploying from your machine)
+
+```bash
+# 1) install dependencies
+npm install
+
+# 2) optional quality gates
+npm run lint
+npm run typecheck
+
+# 3) local production build validation
+npm run build
+npm run start
+
+# 4) commit and push
+git add .
+git commit -m "Prepare production deployment for Vercel + Supabase"
+git push origin main
+
+# 5) Supabase schema apply (via dashboard)
+# Open Supabase SQL Editor and run:
+#   supabase/schema.sql
+```
+
+If you use Vercel CLI instead of dashboard:
+
+```bash
+npm i -g vercel
+vercel login
+vercel link
+vercel --prod
+```
+
+## Supabase Row Level Security (RLS)
+
+For production, this project now includes baseline RLS policies in `supabase/schema.sql`.
+
+### What is enabled
+RLS is enabled on these tables:
+- `users`
+- `games`
+- `game_players`
+- `location_updates`
+- `chat_messages`
+- `player_rewards`
+- `player_reward_cooldowns`
+- `push_subscriptions`
+- `safe_zones`
+- `mission_zones`
+- `mission_reward_activations`
+
+### Policy behavior (MVP baseline)
+- Users can read/update only their own `users` row.
+- Players can read games they belong to (`games` + `game_players` participant visibility).
+- Players can read/write only their own `location_updates` rows.
+- Players can read/write chat only for games they belong to.
+- Players can read only their own rewards/cooldowns.
+- Push subscriptions are owner-managed only.
+- Hosts can update host-owned game config and manage zones for their games.
+- Mission reward activations are readable only by game participants (and host).
+
+### Assumptions
+- `auth.uid()` maps to your app `users.id` values.
+- Backend route handlers that use Supabase service-role credentials keep full access and bypass RLS by design.
+- If you need direct client-side writes to additional tables later (for example mission submission uploads), add explicit table policies instead of disabling RLS.
+
+### Tables intentionally left broader for MVP
+The following gameplay/admin tables currently do **not** have RLS policies in this baseline and are expected to be accessed by server-side service-role routes only:
+- `missions`
+- `mission_completions`
+- `captures`
+- `clues`
+- `leaderboard_stats`
+- `capture_audit_logs`
+- `suspicious_events`
+
+If you move any of these to direct client access, add table-specific RLS policies before exposing them.
+>>>>>>> theirs

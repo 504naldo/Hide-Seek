@@ -225,3 +225,217 @@ create table if not exists player_reward_cooldowns (
 );
 
 create index if not exists player_reward_cooldowns_lookup_idx on player_reward_cooldowns(game_id, user_id, reward_type, cooldown_ends_at desc);
+<<<<<<< ours
+=======
+
+
+-- RLS helpers
+create or replace function public.is_game_participant(target_game_id uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from game_players gp
+    where gp.game_id = target_game_id
+      and gp.user_id = auth.uid()
+  );
+$$;
+
+create or replace function public.is_game_host(target_game_id uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from games g
+    where g.id = target_game_id
+      and g.host_user_id = auth.uid()
+  );
+$$;
+
+
+-- Enable RLS on gameplay tables
+alter table users enable row level security;
+alter table games enable row level security;
+alter table game_players enable row level security;
+alter table location_updates enable row level security;
+alter table chat_messages enable row level security;
+alter table player_rewards enable row level security;
+alter table player_reward_cooldowns enable row level security;
+alter table push_subscriptions enable row level security;
+alter table safe_zones enable row level security;
+alter table mission_zones enable row level security;
+alter table mission_reward_activations enable row level security;
+
+
+-- users: own profile row only
+drop policy if exists users_select_own on users;
+create policy users_select_own
+  on users
+  for select
+  using (id = auth.uid());
+
+drop policy if exists users_update_own on users;
+create policy users_update_own
+  on users
+  for update
+  using (id = auth.uid())
+  with check (id = auth.uid());
+
+
+-- games: participants/host can read, host can update host-owned game config
+drop policy if exists games_select_participant on games;
+create policy games_select_participant
+  on games
+  for select
+  using (is_game_participant(id) or host_user_id = auth.uid());
+
+drop policy if exists games_update_host on games;
+create policy games_update_host
+  on games
+  for update
+  using (host_user_id = auth.uid())
+  with check (host_user_id = auth.uid());
+
+
+-- game_players: players can read membership for their games
+drop policy if exists game_players_select_participant_game on game_players;
+create policy game_players_select_participant_game
+  on game_players
+  for select
+  using (is_game_participant(game_id));
+
+
+-- location updates: players can read/write only their own updates
+drop policy if exists location_updates_select_own on location_updates;
+create policy location_updates_select_own
+  on location_updates
+  for select
+  using (user_id = auth.uid());
+
+drop policy if exists location_updates_insert_own on location_updates;
+create policy location_updates_insert_own
+  on location_updates
+  for insert
+  with check (user_id = auth.uid() and is_game_participant(game_id));
+
+drop policy if exists location_updates_update_own on location_updates;
+create policy location_updates_update_own
+  on location_updates
+  for update
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists location_updates_delete_own on location_updates;
+create policy location_updates_delete_own
+  on location_updates
+  for delete
+  using (user_id = auth.uid());
+
+
+-- chat: participants can read/write chat for games they belong to
+drop policy if exists chat_messages_select_participant on chat_messages;
+create policy chat_messages_select_participant
+  on chat_messages
+  for select
+  using (is_game_participant(game_id));
+
+drop policy if exists chat_messages_insert_participant on chat_messages;
+create policy chat_messages_insert_participant
+  on chat_messages
+  for insert
+  with check (sender_user_id = auth.uid() and is_game_participant(game_id));
+
+drop policy if exists chat_messages_update_sender on chat_messages;
+create policy chat_messages_update_sender
+  on chat_messages
+  for update
+  using (sender_user_id = auth.uid() and is_game_participant(game_id))
+  with check (sender_user_id = auth.uid() and is_game_participant(game_id));
+
+drop policy if exists chat_messages_delete_sender on chat_messages;
+create policy chat_messages_delete_sender
+  on chat_messages
+  for delete
+  using (sender_user_id = auth.uid() and is_game_participant(game_id));
+
+
+-- rewards/cooldowns: players can read their own reward state
+drop policy if exists player_rewards_select_own on player_rewards;
+create policy player_rewards_select_own
+  on player_rewards
+  for select
+  using (user_id = auth.uid());
+
+drop policy if exists player_reward_cooldowns_select_own on player_reward_cooldowns;
+create policy player_reward_cooldowns_select_own
+  on player_reward_cooldowns
+  for select
+  using (user_id = auth.uid());
+
+
+-- push subscriptions: owner-managed only
+drop policy if exists push_subscriptions_select_own on push_subscriptions;
+create policy push_subscriptions_select_own
+  on push_subscriptions
+  for select
+  using (user_id = auth.uid());
+
+drop policy if exists push_subscriptions_insert_own on push_subscriptions;
+create policy push_subscriptions_insert_own
+  on push_subscriptions
+  for insert
+  with check (user_id = auth.uid());
+
+drop policy if exists push_subscriptions_update_own on push_subscriptions;
+create policy push_subscriptions_update_own
+  on push_subscriptions
+  for update
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists push_subscriptions_delete_own on push_subscriptions;
+create policy push_subscriptions_delete_own
+  on push_subscriptions
+  for delete
+  using (user_id = auth.uid());
+
+
+-- zones: participants can read, hosts can manage for games they host
+drop policy if exists safe_zones_select_participant on safe_zones;
+create policy safe_zones_select_participant
+  on safe_zones
+  for select
+  using (is_game_participant(game_id));
+
+drop policy if exists safe_zones_manage_host on safe_zones;
+create policy safe_zones_manage_host
+  on safe_zones
+  for all
+  using (is_game_host(game_id))
+  with check (is_game_host(game_id));
+
+drop policy if exists mission_zones_select_participant on mission_zones;
+create policy mission_zones_select_participant
+  on mission_zones
+  for select
+  using (is_game_participant(game_id));
+
+drop policy if exists mission_zones_manage_host on mission_zones;
+create policy mission_zones_manage_host
+  on mission_zones
+  for all
+  using (is_game_host(game_id))
+  with check (is_game_host(game_id));
+
+
+-- mission reward activations: readable by relevant game participants/host
+drop policy if exists mission_reward_activations_select_participants on mission_reward_activations;
+create policy mission_reward_activations_select_participants
+  on mission_reward_activations
+  for select
+  using (is_game_participant(game_id) or is_game_host(game_id));
+>>>>>>> theirs
