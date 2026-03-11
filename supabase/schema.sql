@@ -226,7 +226,10 @@ create table if not exists player_reward_cooldowns (
 
 create index if not exists player_reward_cooldowns_lookup_idx on player_reward_cooldowns(game_id, user_id, reward_type, cooldown_ends_at desc);
 <<<<<<< ours
+<<<<<<< ours
 =======
+=======
+>>>>>>> theirs
 
 
 -- RLS helpers
@@ -234,10 +237,19 @@ create or replace function public.is_game_participant(target_game_id uuid)
 returns boolean
 language sql
 stable
+<<<<<<< ours
 as $$
   select exists (
     select 1
     from game_players gp
+=======
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.game_players gp
+>>>>>>> theirs
     where gp.game_id = target_game_id
       and gp.user_id = auth.uid()
   );
@@ -247,10 +259,19 @@ create or replace function public.is_game_host(target_game_id uuid)
 returns boolean
 language sql
 stable
+<<<<<<< ours
 as $$
   select exists (
     select 1
     from games g
+=======
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.games g
+>>>>>>> theirs
     where g.id = target_game_id
       and g.host_user_id = auth.uid()
   );
@@ -438,4 +459,7 @@ create policy mission_reward_activations_select_participants
   on mission_reward_activations
   for select
   using (is_game_participant(game_id) or is_game_host(game_id));
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs

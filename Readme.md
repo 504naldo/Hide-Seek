@@ -274,7 +274,10 @@ App runs at `http://localhost:3000`.
 - Mission completion checks these limits before granting a new inventory reward.
 - Missions UI now shows active rewards, cooldowns, and per-item unavailable activation reason.
 <<<<<<< ours
+<<<<<<< ours
 =======
+=======
+>>>>>>> theirs
 
 ## Production Deployment
 
@@ -420,6 +423,10 @@ RLS is enabled on these tables:
 ### Assumptions
 - `auth.uid()` maps to your app `users.id` values.
 - Backend route handlers that use Supabase service-role credentials keep full access and bypass RLS by design.
+<<<<<<< ours
+=======
+- RLS helper functions are defined as `SECURITY DEFINER` to avoid recursive policy evaluation errors when policies check participant/host membership.
+>>>>>>> theirs
 - If you need direct client-side writes to additional tables later (for example mission submission uploads), add explicit table policies instead of disabling RLS.
 
 ### Tables intentionally left broader for MVP
@@ -433,4 +440,7 @@ The following gameplay/admin tables currently do **not** have RLS policies in th
 - `suspicious_events`
 
 If you move any of these to direct client access, add table-specific RLS policies before exposing them.
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
